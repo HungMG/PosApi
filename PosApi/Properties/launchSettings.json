@@ -1,0 +1,12 @@
+﻿{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "DefaultConnection": "DÁN_CHUỖI_KẾT_NỐI_TỪ_NEON_TECH_VÀO_ĐÂY"
+  }
+}

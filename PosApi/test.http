@@ -1,0 +1,81 @@
+POST http://localhost:5000/api/categories
+Content-Type: application/json
+
+{
+  "name": "Bún Đậu Mắm Tôm",
+  "isActive": true
+}
+
+###
+
+POST http://localhost:5000/api/categories
+Content-Type: application/json
+
+{
+  "name": "Cơm Gà Xối Mỡ",
+  "isActive": true
+}
+
+###
+
+POST http://localhost:5000/api/categories
+Content-Type: application/json
+
+{
+  "name": "Trà Trái Cây & Trà Sữa",
+  "isActive": true
+}
+
+### Thêm phần Bún Đậu Tá Lả (gán vào CategoryId = 1)
+POST http://localhost:5000/api/products
+Content-Type: application/json
+
+{
+  "name": "Bún Đậu Tá Lả (Có tai heo)",
+  "price": 55000,
+  "imageUrl": "https://hinh-anh-bun-dau.jpg",
+  "isAvailable": true,
+  "categoryId": 1
+}
+
+### Thêm phần Cơm Gà (gán vào CategoryId = 2)
+POST http://localhost:5000/api/products
+Content-Type: application/json
+
+{
+  "name": "Cơm Gà Xối Mỡ Thêm Cơm",
+  "price": 45000,
+  "imageUrl": "https://hinh-anh-com-ga.jpg",
+  "isAvailable": true,
+  "categoryId": 2
+}
+
+### Thêm Trà (gán vào CategoryId = 3)
+POST http://localhost:5000/api/products
+Content-Type: application/json
+
+{
+  "name": "Trà Trái Cây Ít Đường (50% đường, 50% đá)",
+  "price": 35000,
+  "imageUrl": "https://hinh-anh-tra.jpg",
+  "isAvailable": true,
+  "categoryId": 3
+}
+
+### Gửi một đơn hàng từ Mobile App lên Server
+POST http://localhost:5000/api/orders
+Content-Type: application/json
+
+{
+  "note": "Khách dặn ít đá, ăn tại bàn",
+  "cartItems": [
+    {
+      "productId": 1, 
+      "quantity": 2
+    },
+    {
+      "productId": 3,
+      "quantity": 1
+    }
+  ]
+}
