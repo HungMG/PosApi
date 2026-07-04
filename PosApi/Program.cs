@@ -3,10 +3,26 @@ using PosApi.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Cấu hình kết nối Database PostgreSQL (Neon.tech)
+// ==========================================
+// 1. CẤU HÌNH CORS (CHO PHÉP WEB GỌI API)
+// ==========================================
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll",
+        policy => policy.AllowAnyOrigin()
+                        .AllowAnyMethod()
+                        .AllowAnyHeader());
+});
+
+// ==========================================
+// 2. CẤU HÌNH DATABASE NEON.TECH
+// ==========================================
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// ==========================================
+// 3. CẤU HÌNH CHỐNG LỖI VÒNG LẶP JSON 500
+// ==========================================
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
@@ -17,6 +33,11 @@ builder.Services.AddControllers().AddJsonOptions(options =>
 
 var app = builder.Build();
 
+// ==========================================
+// 4. KÍCH HOẠT CORS (Phải đặt TRƯỚC MapControllers)
+// ==========================================
+app.UseCors("AllowAll");
+
 // TẠM TẮT KHỐI NÀY ĐỂ TRÁNH LỖI BUILD:
 // if (app.Environment.IsDevelopment())
 // {
@@ -26,5 +47,4 @@ var app = builder.Build();
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
-
 app.Run();
