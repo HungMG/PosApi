@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PosApi.Data;
-using PosApi.DTOs;
 using PosApi.Models;
 
 namespace PosApi.Controllers
@@ -17,57 +16,58 @@ namespace PosApi.Controllers
             _context = context;
         }
 
-        // Bắn đơn hàng từ App lên Server
         [HttpPost]
-        public async Task<ActionResult> CreateOrder(OrderRequestDto request)
+        public async Task<IActionResult> CreateOrder([FromBody] OrderCreateDto dto)
         {
-            // 1. Khởi tạo một đơn hàng mới (Trạng thái mặc định là "New")
-            var newOrder = new Order
+            if (dto.CartItems == null || !dto.CartItems.Any())
             {
-                Note = request.Note,
-                TotalAmount = 0
-            };
-
-            // 2. Duyệt qua từng món trong giỏ hàng do App gửi lên
-            foreach (var item in request.CartItems)
-            {
-                // Truy vấn Database để lấy ĐÚNG giá gốc, chống gian lận/lỗi app
-                var product = await _context.Products.FindAsync(item.ProductId);
-
-                // Nếu món ăn không tồn tại hoặc đã bị khóa (hết hàng), bỏ qua
-                if (product == null || !product.IsAvailable) continue;
-
-                // 3. Tạo chi tiết đơn hàng
-                var orderDetail = new OrderDetail
-                {
-                    ProductId = product.Id,
-                    Quantity = item.Quantity,
-                    UnitPrice = product.Price // Chốt giá ngay tại thời điểm đặt
-                };
-
-                newOrder.OrderDetails.Add(orderDetail);
-
-                // 4. Cộng dồn tiền vào tổng hóa đơn
-                newOrder.TotalAmount += (product.Price * item.Quantity);
+                return BadRequest("Giỏ hàng đang trống!");
             }
 
-            // Nếu giỏ hàng rỗng (do lỗi hoặc chọn toàn món hết hàng) thì không lưu
-            if (!newOrder.OrderDetails.Any()) return BadRequest("Giỏ hàng trống hoặc món đã hết.");
+            decimal totalAmount = 0;
+            var orderDetails = new List<OrderDetail>();
 
-            // 5. Lưu toàn bộ xuống Neon.tech
-            _context.Orders.Add(newOrder);
+            // 1. Quét từng món App gửi lên để dò giá gốc dưới DB (Bảo mật, chống hack giá)
+            foreach (var item in dto.CartItems)
+            {
+                var product = await _context.Products.FindAsync(item.ProductId);
+                if (product != null)
+                {
+                    orderDetails.Add(new OrderDetail
+                    {
+                        ProductId = product.Id,
+                        Quantity = item.Quantity,
+                        UnitPrice = product.Price // Chốt giá tại thời điểm bán
+                    });
+
+                    totalAmount += (product.Price * item.Quantity);
+                }
+            }
+
+            // 2. Tạo Hóa Đơn (Áp dụng đúng Model của bạn)
+            var order = new Order
+            {
+                Note = dto.Note,
+                TotalAmount = totalAmount,
+                OrderDate = DateTime.UtcNow,
+                // Status = "New" -> Thuộc tính này sẽ tự động được gán mặc định như bạn đã code trong Model
+                OrderDetails = orderDetails
+            };
+
+            // 3. Lưu vào Database Neon
+            _context.Orders.Add(order);
             await _context.SaveChangesAsync();
 
-            return Ok(newOrder);
+            return Ok(order); // Trả về thông tin hóa đơn cho App biết là thành công
         }
 
-        // API Lấy danh sách đơn hàng cho Web Admin xem
+        // (Tặng kèm) API Lấy danh sách hóa đơn để mốt làm tab "Lịch sử đơn hàng"
         [HttpGet]
-        public async Task<ActionResult> GetOrders()
+        public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
         {
             var orders = await _context.Orders
                 .Include(o => o.OrderDetails)
-                .ThenInclude(od => od.Product) // Kéo theo cả tên món ăn ra để Admin xem cho dễ
+                .ThenInclude(od => od.Product)
                 .OrderByDescending(o => o.OrderDate)
                 .ToListAsync();
 
