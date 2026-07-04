@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="PosApi/PosApi.csproj" />
+  <Project Path="PosWebAdmin/PosWebAdmin.csproj" Id="13473124-581a-40ed-b002-67cd4f6cea38" />
 </Solution>

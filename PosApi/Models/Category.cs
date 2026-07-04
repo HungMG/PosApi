@@ -1,15 +1,23 @@
-﻿namespace PosApi.Models
+﻿using System.Collections.Generic;
+
+namespace PosApi.Models // Sửa lại thành tên namespace dự án của bạn nếu cần
 {
     public class Category
     {
         public int Id { get; set; }
-
         public string Name { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
 
-        // Trạng thái hiển thị danh mục (true: đang bán, false: tạm ẩn)
-        public bool IsActive { get; set; } = true;
+        // ==========================================
+        // 1. CẤU TRÚC DANH MỤC CHA - CON
+        // ==========================================
+        public int? ParentId { get; set; }
+        public Category? Parent { get; set; }
+        public ICollection<Category> SubCategories { get; set; } = new List<Category>();
 
-        // Mối quan hệ: 1 danh mục có thể có nhiều món ăn
+        // ==========================================
+        // 2. LIÊN KẾT VỚI BẢNG MÓN ĂN (DÒNG BỊ THIẾU)
+        // ==========================================
         public ICollection<Product> Products { get; set; } = new List<Product>();
     }
 }
