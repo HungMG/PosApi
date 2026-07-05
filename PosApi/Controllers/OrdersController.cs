@@ -61,6 +61,50 @@ namespace PosApi.Controllers
 
             return Ok(order); // Trả về thông tin hóa đơn cho App biết là thành công
         }
+        // 1. HÀM XÓA ĐƠN HÀNG
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteOrder(int id)
+        {
+            var order = await _context.Orders.FindAsync(id);
+            if (order == null) return NotFound();
+
+            _context.Orders.Remove(order);
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
+
+        // 2. HÀM SỬA ĐƠN HÀNG (Cập nhật lại món)
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateOrder(int id, [FromBody] OrderCreateDto dto)
+        {
+            var order = await _context.Orders.Include(o => o.OrderDetails).FirstOrDefaultAsync(o => o.Id == id);
+            if (order == null) return NotFound();
+
+            // Xóa sạch các món cũ trong đơn
+            _context.OrderDetails.RemoveRange(order.OrderDetails);
+
+            decimal totalAmount = 0;
+            var newDetails = new List<OrderDetail>();
+
+            // Tính tiền lại và gắn món mới vào
+            foreach (var item in dto.CartItems)
+            {
+                var product = await _context.Products.FindAsync(item.ProductId);
+                if (product != null)
+                {
+                    newDetails.Add(new OrderDetail { ProductId = product.Id, Quantity = item.Quantity, UnitPrice = product.Price });
+                    totalAmount += (product.Price * item.Quantity);
+                }
+            }
+
+            order.Note = dto.Note;
+            order.Status = !string.IsNullOrEmpty(dto.Status) ? dto.Status : order.Status;
+            order.TotalAmount = totalAmount;
+            order.OrderDetails = newDetails;
+
+            await _context.SaveChangesAsync();
+            return Ok(order);
+        }
 
         [HttpPut("{id}/pay")]
         public async Task<IActionResult> PayOrder(int id)
