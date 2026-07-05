@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PosApi.Data;
+using PosApi.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +29,8 @@ builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
 });
 
+builder.Services.AddSignalR();
+
 // TẠM TẮT DÒNG NÀY ĐỂ TRÁNH LỖI BUILD:
 // builder.Services.AddOpenApi();
 
@@ -43,7 +46,7 @@ app.UseCors("AllowAll");
 // {
 //     app.MapOpenApi();
 // }
-
+app.MapHub<OrderHub>("/orderHub");
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
