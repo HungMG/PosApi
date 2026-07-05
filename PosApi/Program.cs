@@ -1,17 +1,19 @@
 using Microsoft.EntityFrameworkCore;
 using PosApi.Data;
+using PosApi.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ==========================================
-// 1. CẤU HÌNH CORS (CHO PHÉP WEB GỌI API)
+// 1. CẤU HÌNH CORS (CHUẨN CHO SIGNALR)
 // ==========================================
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll",
-        policy => policy.AllowAnyOrigin()
+        policy => policy.SetIsOriginAllowed(_ => true) // Thay thế AllowAnyOrigin
                         .AllowAnyMethod()
-                        .AllowAnyHeader());
+                        .AllowAnyHeader()
+                        .AllowCredentials());          // BẮT BUỘC PHẢI CÓ cho SignalR
 });
 
 // ==========================================
@@ -28,14 +30,18 @@ builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
 });
 
+// Thêm dịch vụ SignalR
+builder.Services.AddSignalR();
+
 // TẠM TẮT DÒNG NÀY ĐỂ TRÁNH LỖI BUILD:
 // builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
 // ==========================================
-// 4. KÍCH HOẠT CORS (Phải đặt TRƯỚC MapControllers)
+// 4. PIPELINE MIDDLEWARE
 // ==========================================
+// KÍCH HOẠT CORS (Phải đặt TRƯỚC MapControllers và MapHub)
 app.UseCors("AllowAll");
 
 // TẠM TẮT KHỐI NÀY ĐỂ TRÁNH LỖI BUILD:
@@ -46,5 +52,8 @@ app.UseCors("AllowAll");
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
+
 app.MapControllers();
+app.MapHub<OrderHub>("/orderHub"); // Đăng ký đường dẫn cho Trạm SignalR
+
 app.Run();

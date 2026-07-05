@@ -2,6 +2,8 @@
 using Microsoft.EntityFrameworkCore;
 using PosApi.Data;
 using PosApi.Models;
+using Microsoft.AspNetCore.SignalR; // Thêm dòng này để xài SignalR
+using PosApi.Hubs;                  // Thêm dòng này để gọi cái OrderHub
 
 namespace PosApi.Controllers
 {
@@ -9,11 +11,14 @@ namespace PosApi.Controllers
     [ApiController]
     public class OrdersController : ControllerBase
     {
-        private readonly AppDbContext _context;
+        private readonly AppDbContext _context; // Giữ nguyên của bạn
+        private readonly IHubContext<OrderHub> _hubContext; // Khai báo thêm cái "Loa"
 
-        public OrdersController(AppDbContext context)
+        // Tiêm cả 2 thứ vào Constructor
+        public OrdersController(AppDbContext context, IHubContext<OrderHub> hubContext)
         {
             _context = context;
+            _hubContext = hubContext;
         }
 
         [HttpPost]
@@ -58,6 +63,7 @@ namespace PosApi.Controllers
             // 3. Lưu vào Database Neon
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
+            await _hubContext.Clients.All.SendAsync("OrderChanged");
 
             return Ok(order); // Trả về thông tin hóa đơn cho App biết là thành công
         }
@@ -70,6 +76,7 @@ namespace PosApi.Controllers
 
             _context.Orders.Remove(order);
             await _context.SaveChangesAsync();
+            await _hubContext.Clients.All.SendAsync("OrderChanged");
             return Ok();
         }
 
@@ -103,6 +110,7 @@ namespace PosApi.Controllers
             order.OrderDetails = newDetails;
 
             await _context.SaveChangesAsync();
+            await _hubContext.Clients.All.SendAsync("OrderChanged");
             return Ok(order);
         }
 

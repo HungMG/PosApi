@@ -2,6 +2,8 @@
 @using PosWebAdmin.Models
 @using PosWebAdmin.Services
 @inject ApiService ApiService
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
 
 <div class="container-fluid py-3" style="max-width: 800px; margin: 0 auto;">
     
@@ -114,10 +116,39 @@
     
     // Biến lưu trữ ngày đang được chọn (Mặc định mở trang lên là lấy ngày Hôm nay)
     private DateTime? filterDate = DateTime.Today;
+    private HubConnection? hubConnection;
 
     protected override async Task OnInitializedAsync()
     {
+        // 1. Tải dữ liệu lần đầu như bình thường (SỬA THÀNH LoadData)
         await LoadData();
+
+        // 2. Kết nối với Trạm phát sóng trên API Render
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("https://pos-cafe-api-52yt.onrender.com/orderHub") // Nhớ để link Render mới nhất
+            .WithAutomaticReconnect() // THÊM DÒNG NÀY: Nếu rớt mạng hoặc Server ngủ, nó sẽ tự gọi lại!
+            .Build();
+
+        // 3. Khi nghe thấy tiếng la "OrderChanged" từ Server...
+        hubConnection.On("OrderChanged", async () =>
+        {
+            // Tự động kéo dữ liệu mới về (SỬA THÀNH LoadData)
+            await LoadData();
+
+            // Ra lệnh cho Web vẽ lại màn hình ngay lập tức
+            await InvokeAsync(StateHasChanged);
+        });
+
+        // 4. Khởi động Ăng-ten
+        await hubConnection.StartAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
     }
 
     private async Task LoadData()
