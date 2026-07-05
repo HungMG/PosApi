@@ -45,12 +45,13 @@ namespace PosApi.Controllers
             }
 
             // 2. Tạo Hóa Đơn (Áp dụng đúng Model của bạn)
+            // 2. Tạo Hóa Đơn
             var order = new Order
             {
                 Note = dto.Note,
                 TotalAmount = totalAmount,
                 OrderDate = DateTime.UtcNow,
-                // Status = "New" -> Thuộc tính này sẽ tự động được gán mặc định như bạn đã code trong Model
+                Status = !string.IsNullOrEmpty(dto.Status) ? dto.Status : "New", // Bắt trạng thái từ điện thoại gửi lên
                 OrderDetails = orderDetails
             };
 

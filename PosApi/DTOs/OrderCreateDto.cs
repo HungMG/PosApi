@@ -4,6 +4,7 @@
     public class OrderCreateDto
     {
         public string Note { get; set; } = string.Empty;
+        public string Status { get; set; } = "New"; // Thêm dòng này để hứng trạng thái
         public List<CartItemDto> CartItems { get; set; } = new();
     }
 

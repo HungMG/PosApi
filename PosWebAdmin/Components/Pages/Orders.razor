@@ -1,0 +1,152 @@
+﻿@page "/orders"
+@using PosWebAdmin.Models
+@using PosWebAdmin.Services
+@inject ApiService ApiService
+
+<div class="container-fluid py-3" style="max-width: 800px; margin: 0 auto;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold text-dark m-0 d-flex align-items-center gap-2">
+            <i class="bi bi-receipt-cutoff text-primary"></i> Lịch Sử Đơn Hàng
+        </h4>
+        <button class="btn btn-outline-primary rounded-pill btn-sm fw-bold px-3 shadow-sm" @onclick="LoadData">
+            <i class="bi bi-arrow-clockwise me-1"></i> Làm mới
+        </button>
+    </div>
+
+    <div class="bg-white p-2 rounded-4 shadow-sm border mb-3 d-flex gap-2">
+        <div class="input-group flex-fill">
+            <span class="input-group-text bg-light border-end-0 rounded-start-4"><i class="bi bi-calendar-date text-primary"></i></span>
+            <input type="date" class="form-control border-start-0 bg-light rounded-end-4" @bind="filterDate" @bind:after="ApplyFilter" />
+        </div>
+        <button class="btn btn-secondary rounded-4 px-3 fw-bold" @onclick="ClearFilter">
+            Tất cả
+        </button>
+    </div>
+
+    @if (filteredOrders.Any())
+    {
+        <div class="d-flex justify-content-between align-items-center mb-3 px-2">
+            <span class="text-muted fw-bold" style="font-size: 0.85rem;">
+                Có @filteredOrders.Count đơn hàng
+            </span>
+            <span class="text-success fw-bold">
+                Tổng: @filteredOrders.Sum(o => o.TotalAmount).ToString("N0")đ
+            </span>
+        </div>
+    }
+
+    @if (filteredOrders == null || !filteredOrders.Any())
+    {
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox fs-1"></i>
+            <p class="mt-2 fw-bold">Không có đơn hàng nào trong ngày này!</p>
+        </div>
+    }
+    else
+    {
+        <div class="d-flex flex-column gap-3">
+            @foreach (var order in filteredOrders)
+            {
+                <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                    
+                    <div class="card-header bg-white border-bottom-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-secondary rounded-pill px-3 py-2 shadow-sm">
+                                Mã: #@order.Id
+                            </span>
+                            
+                            @if (order.Status == "Paid" || order.Status == "Completed")
+                            {
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle rounded-pill px-2 py-1">
+                                    <i class="bi bi-check-circle-fill me-1"></i> Đã thanh toán
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning bg-opacity-10 text-warning border border-warning-subtle rounded-pill px-2 py-1" style="color: #d97706 !important;">
+                                    <i class="bi bi-hourglass-split me-1"></i> Chưa thanh toán
+                                </span>
+                            }
+                        </div>
+                        <h5 class="fw-bold text-success m-0 font-monospace">@order.TotalAmount.ToString("N0")đ</h5>
+                    </div>
+
+                    <div class="px-3 pt-1 text-muted" style="font-size: 0.8rem;">
+                        <i class="bi bi-clock"></i> @order.OrderDate.ToLocalTime().ToString("HH:mm - dd/MM/yyyy")
+                    </div>
+
+                    <div class="card-body pt-2 pb-3">
+                        @if (!string.IsNullOrEmpty(order.Note))
+                        {
+                            <div class="bg-warning bg-opacity-10 border border-warning-subtle text-dark p-2 rounded-3 mb-2" style="font-size: 0.85rem;">
+                                <i class="bi bi-journal-text me-1 text-warning"></i> <strong>Ghi chú:</strong> @order.Note
+                            </div>
+                        }
+
+                        <ul class="list-group list-group-flush mt-2">
+                            @foreach (var item in order.OrderDetails)
+                            {
+                                <li class="list-group-item px-0 py-2 d-flex justify-content-between border-0 border-bottom border-light">
+                                    <div class="fw-bold text-dark">
+                                        <span class="text-primary me-2">x@(item.Quantity)</span>
+                                        @(item.Product?.Name ?? "Món không xác định")
+                                    </div>
+                                    <div class="text-muted" style="font-size: 0.9rem;">
+                                        @((item.UnitPrice * item.Quantity).ToString("N0"))đ
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    // Danh sách gốc chứa toàn bộ data kéo từ API
+    private List<Order> allOrders = new();
+    
+    // Danh sách sẽ được hiển thị ra màn hình (đã qua bộ lọc)
+    private List<Order> filteredOrders = new();
+    
+    // Biến lưu trữ ngày đang được chọn (Mặc định mở trang lên là lấy ngày Hôm nay)
+    private DateTime? filterDate = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        allOrders = await ApiService.GetOrdersAsync();
+        ApplyFilter(); // Tải xong thì lọc liền
+    }
+
+    // Hàm thực thi việc lọc dữ liệu
+    private void ApplyFilter()
+    {
+        if (filterDate.HasValue)
+        {
+            // So sánh ngày (bỏ qua giờ phút) để lọc ra đúng các đơn của ngày đó
+            filteredOrders = allOrders
+                .Where(o => o.OrderDate.ToLocalTime().Date == filterDate.Value.Date)
+                .ToList();
+        }
+        else
+        {
+            // Nếu không chọn ngày nào (bấm nút Tất cả) thì hiện hết
+            filteredOrders = allOrders.ToList();
+        }
+    }
+
+    // Hàm xóa bộ lọc để xem toàn bộ lịch sử
+    private void ClearFilter()
+    {
+        filterDate = null;
+        ApplyFilter();
+    }
+}

@@ -95,5 +95,27 @@ namespace PosWebAdmin.Services
             }
             catch { return false; }
         }
+
+        public async Task<bool> UpdateProductAsync(int id, Product product)
+        {
+            try
+            {
+                var response = await _httpClient.PutAsJsonAsync($"/api/products/{id}", product);
+                return response.IsSuccessStatusCode;
+            }
+            catch { return false; }
+        }
+        // ==========================================
+        // QUẢN LÝ ĐƠN HÀNG (ORDERS)
+        // ==========================================
+        public async Task<List<Order>> GetOrdersAsync()
+        {
+            try
+            {
+                var orders = await _httpClient.GetFromJsonAsync<List<Order>>("/api/orders");
+                return orders ?? new List<Order>();
+            }
+            catch { return new List<Order>(); }
+        }
     }
 }
