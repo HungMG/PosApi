@@ -45,12 +45,13 @@ namespace PosApi.Controllers
             }
 
             // 2. Tạo Hóa Đơn (Áp dụng đúng Model của bạn)
+            // 2. Tạo Hóa Đơn
             var order = new Order
             {
                 Note = dto.Note,
                 TotalAmount = totalAmount,
                 OrderDate = DateTime.UtcNow,
-                // Status = "New" -> Thuộc tính này sẽ tự động được gán mặc định như bạn đã code trong Model
+                Status = !string.IsNullOrEmpty(dto.Status) ? dto.Status : "New", // Bắt trạng thái từ điện thoại gửi lên
                 OrderDetails = orderDetails
             };
 
@@ -59,6 +60,17 @@ namespace PosApi.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(order); // Trả về thông tin hóa đơn cho App biết là thành công
+        }
+
+        [HttpPut("{id}/pay")]
+        public async Task<IActionResult> PayOrder(int id)
+        {
+            var order = await _context.Orders.FindAsync(id);
+            if (order == null) return NotFound();
+
+            order.Status = "Paid"; // Đổi trạng thái thành Đã thanh toán
+            await _context.SaveChangesAsync();
+            return Ok();
         }
 
         // (Tặng kèm) API Lấy danh sách hóa đơn để mốt làm tab "Lịch sử đơn hàng"
