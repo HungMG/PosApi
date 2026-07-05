@@ -49,7 +49,7 @@ app.UseCors("AllowAll");
 // {
 //     app.MapOpenApi();
 // }
-
+app.MapHub<OrderHub>("/orderHub");
 app.UseHttpsRedirection();
 app.UseAuthorization();
 
