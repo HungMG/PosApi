@@ -23,5 +23,6 @@ namespace PosApi.Models
         public string Role { get; set; } = "Staff"; // Admin, Cashier, Kitchen, Staff
 
         public bool IsActive { get; set; } = true;
+        public decimal HourlyRate { get; set; } = 20000;
     }
 }
