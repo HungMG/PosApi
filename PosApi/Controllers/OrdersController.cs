@@ -1,9 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using PosApi.Data;
+using Microsoft.AspNetCore.SignalR;
 using PosApi.Models;
-using Microsoft.AspNetCore.SignalR; // Thêm dòng này để xài SignalR
-using PosApi.Hubs;                  // Thêm dòng này để gọi cái OrderHub
+using PosApi.Hubs;
 
 namespace PosApi.Controllers
 {
@@ -11,10 +10,9 @@ namespace PosApi.Controllers
     [ApiController]
     public class OrdersController : ControllerBase
     {
-        private readonly AppDbContext _context; // Giữ nguyên của bạn
-        private readonly IHubContext<OrderHub> _hubContext; // Khai báo thêm cái "Loa"
+        private readonly AppDbContext _context;
+        private readonly IHubContext<OrderHub> _hubContext;
 
-        // Tiêm cả 2 thứ vào Constructor
         public OrdersController(AppDbContext context, IHubContext<OrderHub> hubContext)
         {
             _context = context;
@@ -25,54 +23,79 @@ namespace PosApi.Controllers
         public async Task<IActionResult> CreateOrder([FromBody] OrderCreateDto dto)
         {
             if (dto.CartItems == null || !dto.CartItems.Any())
-            {
                 return BadRequest("Giỏ hàng đang trống!");
-            }
 
             decimal totalAmount = 0;
             var orderDetails = new List<OrderDetail>();
 
-            // 1. Quét từng món App gửi lên để dò giá gốc dưới DB (Bảo mật, chống hack giá)
             foreach (var item in dto.CartItems)
             {
                 var product = await _context.Products.FindAsync(item.ProductId);
                 if (product != null)
                 {
+                    // 1. Kiểm tra món này có bị hết hàng không?
+                    if (!product.IsAvailable)
+                        return BadRequest($"Món {product.Name} đã hết hàng!");
+
+                    // 2. Trừ Quota (nếu món đó có thiết lập giới hạn bán trong ngày)
+                    if (product.DailyQuota.HasValue)
+                    {
+                        if (product.DailyQuota.Value < item.Quantity)
+                            return BadRequest($"Món {product.Name} chỉ còn {product.DailyQuota.Value} phần!");
+
+                        product.DailyQuota -= item.Quantity; // Trừ số lượng
+
+                        // Nếu bán hết quota, tự động tắt hiển thị món đó luôn
+                        if (product.DailyQuota <= 0)
+                        {
+                            product.DailyQuota = 0;
+                            product.IsAvailable = false;
+                        }
+                    }
+
                     orderDetails.Add(new OrderDetail
                     {
                         ProductId = product.Id,
                         Quantity = item.Quantity,
-                        UnitPrice = product.Price // Chốt giá tại thời điểm bán
+                        UnitPrice = product.Price
                     });
 
                     totalAmount += (product.Price * item.Quantity);
                 }
             }
 
-            // 2. Tạo Hóa Đơn (Áp dụng đúng Model của bạn)
-            // 2. Tạo Hóa Đơn
             var order = new Order
             {
                 Note = dto.Note,
                 TotalAmount = totalAmount,
                 OrderDate = DateTime.UtcNow,
-                Status = !string.IsNullOrEmpty(dto.Status) ? dto.Status : "New", // Bắt trạng thái từ điện thoại gửi lên
+                Status = !string.IsNullOrEmpty(dto.Status) ? dto.Status : "Pending",
+                OrderType = !string.IsNullOrEmpty(dto.OrderType) ? dto.OrderType : "DineIn", // Bắt DineIn/TakeAway
                 OrderDetails = orderDetails
             };
 
-            // 3. Lưu vào Database Neon
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
             await _hubContext.Clients.All.SendAsync("OrderChanged");
 
-            return Ok(order); // Trả về thông tin hóa đơn cho App biết là thành công
+            return Ok(order);
         }
-        // 1. HÀM XÓA ĐƠN HÀNG
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteOrder(int id)
         {
-            var order = await _context.Orders.FindAsync(id);
+            var order = await _context.Orders.Include(o => o.OrderDetails).ThenInclude(od => od.Product).FirstOrDefaultAsync(o => o.Id == id);
             if (order == null) return NotFound();
+
+            // Nếu hủy đơn, trả lại Quota cho các món
+            foreach (var item in order.OrderDetails)
+            {
+                if (item.Product != null && item.Product.DailyQuota.HasValue)
+                {
+                    item.Product.DailyQuota += item.Quantity;
+                    item.Product.IsAvailable = true; // Bật lại vì vừa có hàng trả về
+                }
+            }
 
             _context.Orders.Remove(order);
             await _context.SaveChangesAsync();
@@ -80,25 +103,42 @@ namespace PosApi.Controllers
             return Ok();
         }
 
-        // 2. HÀM SỬA ĐƠN HÀNG (Cập nhật lại món)
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateOrder(int id, [FromBody] OrderCreateDto dto)
         {
-            var order = await _context.Orders.Include(o => o.OrderDetails).FirstOrDefaultAsync(o => o.Id == id);
+            var order = await _context.Orders.Include(o => o.OrderDetails).ThenInclude(od => od.Product).FirstOrDefaultAsync(o => o.Id == id);
             if (order == null) return NotFound();
 
-            // Xóa sạch các món cũ trong đơn
+            // 1. Khôi phục lại Quota của các món trong hóa đơn CŨ
+            foreach (var oldItem in order.OrderDetails)
+            {
+                if (oldItem.Product != null && oldItem.Product.DailyQuota.HasValue)
+                {
+                    oldItem.Product.DailyQuota += oldItem.Quantity;
+                    oldItem.Product.IsAvailable = true;
+                }
+            }
             _context.OrderDetails.RemoveRange(order.OrderDetails);
 
             decimal totalAmount = 0;
             var newDetails = new List<OrderDetail>();
 
-            // Tính tiền lại và gắn món mới vào
+            // 2. Tính tiền và trừ lại Quota cho các món trong hóa đơn MỚI
             foreach (var item in dto.CartItems)
             {
                 var product = await _context.Products.FindAsync(item.ProductId);
                 if (product != null)
                 {
+                    if (product.DailyQuota.HasValue)
+                    {
+                        product.DailyQuota -= item.Quantity;
+                        if (product.DailyQuota <= 0)
+                        {
+                            product.DailyQuota = 0;
+                            product.IsAvailable = false;
+                        }
+                    }
+
                     newDetails.Add(new OrderDetail { ProductId = product.Id, Quantity = item.Quantity, UnitPrice = product.Price });
                     totalAmount += (product.Price * item.Quantity);
                 }
@@ -106,6 +146,7 @@ namespace PosApi.Controllers
 
             order.Note = dto.Note;
             order.Status = !string.IsNullOrEmpty(dto.Status) ? dto.Status : order.Status;
+            order.OrderType = !string.IsNullOrEmpty(dto.OrderType) ? dto.OrderType : order.OrderType;
             order.TotalAmount = totalAmount;
             order.OrderDetails = newDetails;
 
@@ -120,12 +161,11 @@ namespace PosApi.Controllers
             var order = await _context.Orders.FindAsync(id);
             if (order == null) return NotFound();
 
-            order.Status = "Paid"; // Đổi trạng thái thành Đã thanh toán
+            order.Status = "Paid";
             await _context.SaveChangesAsync();
             return Ok();
         }
 
-        // (Tặng kèm) API Lấy danh sách hóa đơn để mốt làm tab "Lịch sử đơn hàng"
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
         {
@@ -137,5 +177,22 @@ namespace PosApi.Controllers
 
             return Ok(orders);
         }
+    }
+
+    // ==========================================
+    // NẾU BẠN CHƯA CÓ DTO, HÃY DÁN ĐOẠN NÀY VÀO TRONG FILE HOẶC TẠO FILE MỚI
+    // ==========================================
+    public class OrderCreateDto
+    {
+        public string? Note { get; set; }
+        public string? Status { get; set; }
+        public string? OrderType { get; set; } // DineIn hoặc TakeAway
+        public List<CartItemDto> CartItems { get; set; } = new List<CartItemDto>();
+    }
+
+    public class CartItemDto
+    {
+        public int ProductId { get; set; }
+        public int Quantity { get; set; }
     }
 }

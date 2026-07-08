@@ -1,21 +1,33 @@
-﻿namespace PosApi.Models
+﻿using PosApi.Models;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
+
+namespace PosApi.Models
 {
     public class OrderDetail
     {
+        [Key]
         public int Id { get; set; }
 
-        // Số lượng món khách đặt
+        [Required]
+        public int OrderId { get; set; }
+
+        [ForeignKey("OrderId")]
+        [JsonIgnore]
+        public virtual Order? Order { get; set; }
+
+        [Required]
+        public int ProductId { get; set; }
+
+        [ForeignKey("ProductId")]
+        public virtual Product? Product { get; set; }
+
+        [Required]
         public int Quantity { get; set; }
 
-        // Giá tại thời điểm đặt (lưu lại để lỡ sau này giá Menu đổi thì hóa đơn cũ không bị lệch)
-        public decimal UnitPrice { get; set; }
-
-        // Khóa ngoại liên kết với Đơn hàng tổng
-        public int OrderId { get; set; }
-        public Order? Order { get; set; }
-
-        // Khóa ngoại liên kết với Món ăn
-        public int ProductId { get; set; }
-        public Product? Product { get; set; }
+        [Required]
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal UnitPrice { get; set; } // Lưu giá tại thời điểm chốt đơn
     }
 }

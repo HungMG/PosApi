@@ -1,23 +1,27 @@
-﻿using System.Collections.Generic;
+﻿using PosApi.Models;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
-namespace PosApi.Models // Sửa lại thành tên namespace dự án của bạn nếu cần
+namespace PosApi.Models
 {
     public class Category
     {
+        [Key]
         public int Id { get; set; }
+
+        [Required]
+        [MaxLength(100)]
         public string Name { get; set; } = string.Empty;
-        public bool IsActive { get; set; }
 
-        // ==========================================
-        // 1. CẤU TRÚC DANH MỤC CHA - CON
-        // ==========================================
         public int? ParentId { get; set; }
-        public Category? Parent { get; set; }
-        public ICollection<Category> SubCategories { get; set; } = new List<Category>();
 
-        // ==========================================
-        // 2. LIÊN KẾT VỚI BẢNG MÓN ĂN (DÒNG BỊ THIẾU)
-        // ==========================================
-        public ICollection<Product> Products { get; set; } = new List<Product>();
+        [ForeignKey("ParentId")]
+        [JsonIgnore] // Tránh bị vòng lặp vô tận khi serialize JSON
+        public virtual Category? Parent { get; set; }
+        public bool IsActive { get; set; } = true;
+
+        public virtual ICollection<Category> SubCategories { get; set; } = new List<Category>();
+        public virtual ICollection<Product> Products { get; set; } = new List<Product>();
     }
 }

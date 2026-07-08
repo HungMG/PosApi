@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using PosApi.Data;
+using PosApi.Models;
 using PosApi.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);

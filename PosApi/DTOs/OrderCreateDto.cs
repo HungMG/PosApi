@@ -1,11 +1,18 @@
-﻿namespace PosApi.Models
+﻿namespace PosApi.Models // Hoặc PosApi.DTOs tùy bạn sắp xếp thư mục
 {
-    // Cái rổ hứng cục dữ liệu từ Mobile App gửi lên
+    // Cái rổ hứng cục dữ liệu từ Mobile App và Web Admin gửi lên
     public class OrderCreateDto
     {
         public string Note { get; set; } = string.Empty;
-        public string Status { get; set; } = "New"; // Thêm dòng này để hứng trạng thái
-        public List<CartItemDto> CartItems { get; set; } = new();
+
+        // Hứng trạng thái (New, Pending, Kitchen, Paid...)
+        public string Status { get; set; } = "New";
+
+        // Hứng loại đơn hàng (DineIn: Tại chỗ, TakeAway: Mang đi)
+        public string OrderType { get; set; } = "DineIn";
+
+        // Danh sách các món trong giỏ hàng
+        public List<CartItemDto> CartItems { get; set; } = new List<CartItemDto>();
     }
 
     public class CartItemDto

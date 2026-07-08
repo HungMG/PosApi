@@ -1,23 +1,33 @@
-﻿namespace PosApi.Models
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace PosApi.Models // Giữ nguyên namespace cũ của bạn
 {
     public class Product
     {
+        [Key]
         public int Id { get; set; }
 
+        [Required]
+        [MaxLength(150)]
         public string Name { get; set; } = string.Empty;
 
-        // Giá tiền của món ăn
+        [Required]
+        [Column(TypeName = "decimal(18,2)")]
         public decimal Price { get; set; }
 
-        // Đường dẫn hình ảnh lưu trên cloud/web
-        public string ImageUrl { get; set; } = string.Empty;
+        public string ImageUrl { get; set; } = string.Empty; // Giữ lại từ model cũ của bạn
 
-        // Trạng thái kho hàng (true: còn hàng, false: hết hàng - dùng để khóa món trên App order)
-        public bool IsAvailable { get; set; } = true;
-
-        // Khóa ngoại liên kết tới bảng Danh mục
+        [Required]
         public int CategoryId { get; set; }
 
-        public Category? Category { get; set; }
+        [ForeignKey("CategoryId")]
+        public virtual Category? Category { get; set; }
+
+        // Tính năng kho tối giản: Gạt Còn/Hết món
+        public bool IsAvailable { get; set; } = true;
+
+        // Giới hạn số lượng bán trong ngày (ví dụ: Hôm nay chỉ có 20 suất bún đậu)
+        public int? DailyQuota { get; set; }
     }
 }

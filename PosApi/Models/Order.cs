@@ -1,23 +1,31 @@
-﻿namespace PosApi.Models
+﻿using PosApi.Models;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace PosApi.Models
 {
     public class Order
     {
+        [Key]
         public int Id { get; set; }
 
-        // Thời gian tạo đơn
         public DateTime OrderDate { get; set; } = DateTime.UtcNow;
 
-        // Tổng tiền của cả hóa đơn
+        [Required]
+        [Column(TypeName = "decimal(18,2)")]
         public decimal TotalAmount { get; set; }
 
-        // Trạng thái đơn hàng: "New" (Mới), "Kitchen" (Đang làm), "Completed" (Hoàn thành)
-        // Dùng cái này để khóa dữ liệu, chặn xóa món khi đang ở bếp
-        public string Status { get; set; } = "New";
+        [Required]
+        [MaxLength(50)]
+        public string Status { get; set; } = "Pending"; // Pending, Paid, Cancelled
 
-        // Ghi chú của khách hàng
-        public string Note { get; set; } = string.Empty;
+        [MaxLength(500)]
+        public string? Note { get; set; }
 
-        // Một đơn hàng sẽ có nhiều chi tiết món ăn bên trong
-        public ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
+        [Required]
+        [MaxLength(50)]
+        public string OrderType { get; set; } = "DineIn"; // DineIn (Ngồi tại chỗ), TakeAway (Mang đi)
+
+        public virtual ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
     }
 }

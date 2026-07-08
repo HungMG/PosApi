@@ -1,8 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using PosApi.Models;
-using System.Reflection.Emit;
 
-namespace PosApi.Data
+namespace PosApi.Models
 {
     public class AppDbContext : DbContext
     {
@@ -10,22 +9,30 @@ namespace PosApi.Data
         {
         }
 
-        // Khai báo các bảng sẽ được tạo trong Database
+        // Khai báo 10 bảng của Trạm 1
         public DbSet<Category> Categories { get; set; }
         public DbSet<Product> Products { get; set; }
         public DbSet<Order> Orders { get; set; }
         public DbSet<OrderDetail> OrderDetails { get; set; }
 
+        public DbSet<Staff> Staffs { get; set; }
+        public DbSet<Attendance> Attendances { get; set; }
+        public DbSet<Salary> Salaries { get; set; }
+
+        public DbSet<Ingredient> Ingredients { get; set; }
+        public DbSet<InventoryReceipt> InventoryReceipts { get; set; }
+        public DbSet<InventoryReceiptDetail> InventoryReceiptDetails { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-            // Cấu hình mối quan hệ 1-Nhiều giữa Category và Product
-            modelBuilder.Entity<Product>()
-                .HasOne(p => p.Category)
-                .WithMany(c => c.Products)
-                .HasForeignKey(p => p.CategoryId)
-                .OnDelete(DeleteBehavior.Cascade); // Nếu xóa danh mục thì tự động xóa các món thuộc danh mục đó
+            // Cấu hình để khi xóa Category cha thì KHÔNG tự động xóa Category con (tránh lỗi xung đột khóa ngoại)
+            modelBuilder.Entity<Category>()
+                .HasMany(c => c.SubCategories) // Theo model cũ của bạn là SubCategories
+                .WithOne(c => c.Parent)
+                .HasForeignKey(c => c.ParentId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }
