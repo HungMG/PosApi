@@ -34,6 +34,10 @@ namespace PosApi.Controllers
                 var ingredient = new Ingredient
                 {
                     Name = dto.Name,
+
+                    // 👉 BỔ SUNG DÒNG NÀY ĐỂ LƯU VÀO DATABASE
+                    Category = string.IsNullOrWhiteSpace(dto.Category) ? "Khác" : dto.Category,
+
                     Unit = dto.Unit,
                     CurrentStock = dto.CurrentStock,
                     MinStock = dto.MinStock,
@@ -114,6 +118,9 @@ namespace PosApi.Controllers
         public class IngredientCreateDto
         {
             public string Name { get; set; } = string.Empty;
+
+            // 👉 BỔ SUNG DÒNG NÀY ĐỂ HỨNG DỮ LIỆU
+            public string Category { get; set; } = "Khác";
             public string Unit { get; set; } = string.Empty;
             public double CurrentStock { get; set; }
             public double MinStock { get; set; }
