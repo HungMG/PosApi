@@ -24,6 +24,9 @@ namespace PosApi.Models
         public DbSet<InventoryReceiptDetail> InventoryReceiptDetails { get; set; }
         public DbSet<SalarySlip> SalarySlips { get; set; }
 
+        public DbSet<Stocktake> Stocktakes { get; set; }
+        public DbSet<StocktakeDetail> StocktakeDetails { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

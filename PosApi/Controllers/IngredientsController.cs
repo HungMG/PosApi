@@ -115,7 +115,7 @@ namespace PosApi.Controllers
         }
 
         // ==========================================
-        // API KIỂM KÊ VÀ CÂN BẰNG KHO (STOCKTAKE)
+        // 1. API CÂN BẰNG KHO VÀ GHI VÀO NHẬT KÝ
         // ==========================================
         [HttpPost("stocktake")]
         public async Task<IActionResult> SubmitStocktake([FromBody] List<StocktakeDto> items)
@@ -123,22 +123,37 @@ namespace PosApi.Controllers
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // A. Tạo 1 cuốn sổ nhật ký cho đợt kiểm tra này
+                var history = new Stocktake { CheckDate = DateTime.UtcNow };
+                _context.Stocktakes.Add(history);
+                await _context.SaveChangesAsync(); // Lưu để lấy ID sổ
+
                 foreach (var item in items)
                 {
+                    // B. CHỈ LƯU VÀO NHẬT KÝ NHỮNG MÓN CÓ SỰ CHÊNH LỆCH (HAO HỤT)
+                    if (item.ActualStock != item.SystemStock)
+                    {
+                        var detail = new StocktakeDetail
+                        {
+                            StocktakeId = history.Id,
+                            IngredientId = item.IngredientId,
+                            SystemStock = item.SystemStock,
+                            ActualStock = item.ActualStock,
+                            Discrepancy = item.ActualStock - item.SystemStock // Tính độ lệch
+                        };
+                        _context.StocktakeDetails.Add(detail);
+                    }
+
+                    // C. Ép số lượng kho phần mềm về đúng số thực tế
                     var ingredient = await _context.Ingredients.FindAsync(item.IngredientId);
                     if (ingredient != null)
                     {
-                        // 1. ÉP SỐ LƯỢNG HỆ THỐNG = SỐ LƯỢNG THỰC TẾ
                         ingredient.CurrentStock = item.ActualStock;
 
-                        // 2. AUTO-LOCK: Nếu món đó xài hết sạch, tự động khóa trên Menu bán hàng
                         if (ingredient.IsLinkedToProduct && ingredient.LinkedProductId.HasValue)
                         {
                             var product = await _context.Products.FindAsync(ingredient.LinkedProductId.Value);
-                            if (product != null)
-                            {
-                                product.IsAvailable = ingredient.CurrentStock > 0;
-                            }
+                            if (product != null) product.IsAvailable = ingredient.CurrentStock > 0;
                         }
                     }
                 }
@@ -150,16 +165,30 @@ namespace PosApi.Controllers
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                return StatusCode(500, "Lỗi khi cân bằng kho: " + ex.Message);
+                return StatusCode(500, "Lỗi hệ thống: " + ex.Message);
             }
+        }
+
+        // ==========================================
+        // 2. API LẤY LỊCH SỬ ĐỂ XEM LẠI
+        // ==========================================
+        [HttpGet("stocktake-history")]
+        public async Task<ActionResult<IEnumerable<Stocktake>>> GetStocktakeHistory()
+        {
+            return await _context.Stocktakes
+                .Include(s => s.Details)
+                    .ThenInclude(d => d.Ingredient) // Lấy kèm tên món
+                .Where(s => s.Details.Any()) // Chỉ lấy những lần kiểm kho có phát hiện lệch
+                .OrderByDescending(s => s.CheckDate)
+                .ToListAsync();
         }
 
         public class StocktakeDto
         {
             public int IngredientId { get; set; }
+            public double SystemStock { get; set; } // Lấy thêm số hệ thống từ web gửi lên
             public double ActualStock { get; set; }
         }
-
         // --- CÁI "RỔ" HỨNG DỮ LIỆU TỪ WEB GỬI LÊN ---
         public class IngredientCreateDto
         {
