@@ -22,6 +22,7 @@ namespace PosApi.Models
         public DbSet<Ingredient> Ingredients { get; set; }
         public DbSet<InventoryReceipt> InventoryReceipts { get; set; }
         public DbSet<InventoryReceiptDetail> InventoryReceiptDetails { get; set; }
+        public DbSet<SalarySlip> SalarySlips { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
