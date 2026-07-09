@@ -15,12 +15,15 @@ namespace PosApi.Controllers
             _context = context;
         }
 
-        // Lấy danh sách Lịch sử Nhập kho
+  
+        // Lấy danh sách Lịch sử Nhập kho (Đã nâng cấp)
         [HttpGet]
         public async Task<ActionResult<IEnumerable<InventoryReceipt>>> GetReceipts()
         {
             return await _context.InventoryReceipts
-                .Include(r => r.Staff) // Lấy kèm tên nhân viên nhập
+                .Include(r => r.Staff) // Lấy kèm tên nhân viên
+                .Include(r => r.ReceiptDetails) // LẤY KÈM CHI TIẾT CÁC MÓN
+                    .ThenInclude(d => d.Ingredient) // LẤY KÈM TÊN CỦA TỪNG MÓN
                 .OrderByDescending(r => r.ImportDate)
                 .ToListAsync();
         }
@@ -87,6 +90,54 @@ namespace PosApi.Controllers
             {
                 await transaction.RollbackAsync(); // Lỗi là hủy sạch, không để rác lại DB
                 return StatusCode(500, "Lỗi khi nhập kho: " + ex.Message);
+            }
+        }
+
+        // XÓA PHIẾU NHẬP KHO (TỰ ĐỘNG TRỪ NGƯỢC LẠI KHO)
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteReceipt(int id)
+        {
+            var receipt = await _context.InventoryReceipts
+                .Include(r => r.ReceiptDetails)
+                .FirstOrDefaultAsync(r => r.Id == id);
+
+            if (receipt == null) return NotFound();
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // 1. Quét các món trong phiếu để trừ ngược lại kho
+                foreach (var item in receipt.ReceiptDetails)
+                {
+                    var ingredient = await _context.Ingredients.FindAsync(item.IngredientId);
+                    if (ingredient != null)
+                    {
+                        ingredient.CurrentStock -= item.Quantity; // Trừ trả lại kho
+                        if (ingredient.CurrentStock < 0) ingredient.CurrentStock = 0; // Tránh bị âm kho ảo
+
+                        // 2. AUTO-LOCK: Kiểm tra xem món đó có bị hết hàng sau khi hủy phiếu không
+                        if (ingredient.IsLinkedToProduct && ingredient.LinkedProductId.HasValue)
+                        {
+                            var product = await _context.Products.FindAsync(ingredient.LinkedProductId.Value);
+                            if (product != null)
+                            {
+                                product.IsAvailable = ingredient.CurrentStock > 0;
+                            }
+                        }
+                    }
+                }
+
+                // 3. Xóa phiếu (Các dòng chi tiết cũng sẽ tự động bị xóa theo nhờ khóa ngoại)
+                _context.InventoryReceipts.Remove(receipt);
+                await _context.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, "Lỗi khi hủy phiếu: " + ex.Message);
             }
         }
 

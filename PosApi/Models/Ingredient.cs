@@ -10,6 +10,9 @@ namespace PosApi.Models
         [Required]
         [MaxLength(150)]
         public string Name { get; set; } = string.Empty;
+        // THÊM DÒNG NÀY VÀO TRONG CLASS INGREDIENT (dưới cột Name)
+        [MaxLength(100)]
+        public string Category { get; set; } = "Khác"; // Phân loại: Tạp hóa, Trái cây, Pha chế, Bao bì...
 
         [Required]
         [MaxLength(50)]
