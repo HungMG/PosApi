@@ -15,44 +15,94 @@ namespace PosApi.Controllers
             _context = context;
         }
 
-        // Xem lịch sử nhập hàng
+        // Lấy danh sách Lịch sử Nhập kho
         [HttpGet]
         public async Task<ActionResult<IEnumerable<InventoryReceipt>>> GetReceipts()
         {
-            var receipts = await _context.InventoryReceipts
-                .Include(r => r.ReceiptDetails)
-                .ThenInclude(rd => rd.Ingredient) // Kéo theo tên nguyên liệu
-                .Include(r => r.Staff) // Kéo theo tên người nhập
+            return await _context.InventoryReceipts
+                .Include(r => r.Staff) // Lấy kèm tên nhân viên nhập
                 .OrderByDescending(r => r.ImportDate)
                 .ToListAsync();
-
-            return Ok(receipts);
         }
 
-        // TẠO PHIẾU NHẬP (Tự động cộng kho)
+        // API NHẬP KHO CHÍNH THỨC
         [HttpPost]
-        public async Task<ActionResult<InventoryReceipt>> PostReceipt(InventoryReceipt receipt)
+        public async Task<ActionResult> CreateReceipt([FromBody] ReceiptCreateDto dto)
         {
-            if (receipt.ReceiptDetails == null || !receipt.ReceiptDetails.Any())
-                return BadRequest("Phiếu nhập không có mặt hàng nào!");
-
-            receipt.ImportDate = DateTime.UtcNow;
-
-            // 1. Lưu phiếu nhập vào DB
-            _context.InventoryReceipts.Add(receipt);
-
-            // 2. Chạy vòng lặp để CỘNG số lượng vào kho thực tế
-            foreach (var detail in receipt.ReceiptDetails)
+            // Mở Transaction bảo vệ dữ liệu
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                var ingredient = await _context.Ingredients.FindAsync(detail.IngredientId);
-                if (ingredient != null)
+                // 1. Khởi tạo Phiếu Nhập Kho (Mẹ)
+                var receipt = new InventoryReceipt
                 {
-                    ingredient.CurrentStock += detail.Quantity; // Cộng dồn tồn kho
-                }
-            }
+                    ImportDate = DateTime.UtcNow,
+                    StaffId = dto.StaffId,
+                    SupplierName = dto.SupplierName,
+                    // Tự động tính tổng tiền trên Server cho an toàn (Lấy Số lượng x Giá nhập)
+                    TotalCost = dto.Details.Sum(d => (decimal)d.Quantity * d.UnitPrice)
+                };
 
-            await _context.SaveChangesAsync();
-            return Ok(receipt);
+                _context.InventoryReceipts.Add(receipt);
+                await _context.SaveChangesAsync(); // Lưu để lấy ReceiptId
+
+                // 2. Quét từng dòng chi tiết (Con) để lưu và cập nhật kho
+                foreach (var item in dto.Details)
+                {
+                    var detail = new InventoryReceiptDetail
+                    {
+                        ReceiptId = receipt.Id,
+                        IngredientId = item.IngredientId,
+                        Quantity = item.Quantity,
+                        UnitPrice = item.UnitPrice
+                    };
+                    _context.InventoryReceiptDetails.Add(detail);
+
+                    // 3. TÌM NGUYÊN LIỆU ĐỂ CỘNG KHO
+                    var ingredient = await _context.Ingredients.FindAsync(item.IngredientId);
+                    if (ingredient != null)
+                    {
+                        ingredient.CurrentStock += item.Quantity; // Cộng dồn số lượng
+                        ingredient.CostPrice = item.UnitPrice;    // Cập nhật giá vốn mới nhất
+
+                        // 4. AUTO-LOCK: Nếu món này có bán trực tiếp, tự động mở bán lại!
+                        if (ingredient.IsLinkedToProduct && ingredient.LinkedProductId.HasValue)
+                        {
+                            var product = await _context.Products.FindAsync(ingredient.LinkedProductId.Value);
+                            if (product != null)
+                            {
+                                product.IsAvailable = ingredient.CurrentStock > 0;
+                            }
+                        }
+                    }
+                }
+
+                // Lưu tất cả và chốt Transaction
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok(receipt);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync(); // Lỗi là hủy sạch, không để rác lại DB
+                return StatusCode(500, "Lỗi khi nhập kho: " + ex.Message);
+            }
+        }
+
+        // --- CÁI "RỔ" HỨNG DỮ LIỆU TỪ WEB GỬI LÊN ---
+        public class ReceiptCreateDto
+        {
+            public int StaffId { get; set; }
+            public string? SupplierName { get; set; }
+            public List<ReceiptDetailDto> Details { get; set; } = new();
+        }
+
+        public class ReceiptDetailDto
+        {
+            public int IngredientId { get; set; }
+            public double Quantity { get; set; }
+            public decimal UnitPrice { get; set; }
         }
     }
 }
