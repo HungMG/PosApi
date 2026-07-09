@@ -1,5 +1,4 @@
-﻿using PosApi.Models;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PosApi.Models
@@ -24,7 +23,11 @@ namespace PosApi.Models
 
         [Required]
         [MaxLength(50)]
-        public string OrderType { get; set; } = "DineIn"; // DineIn (Ngồi tại chỗ), TakeAway (Mang đi)
+        public string OrderType { get; set; } = "Tại chỗ"; // Sửa lại thành tiếng Việt cho khớp bộ lọc
+
+        // 👉 DÒNG MỚI ĐƯỢC THÊM VÀO:
+        [MaxLength(50)]
+        public string? PaymentMethod { get; set; } // Sẽ lưu "Tiền mặt" hoặc "Chuyển khoản"
 
         public virtual ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
     }
