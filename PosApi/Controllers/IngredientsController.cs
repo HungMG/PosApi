@@ -114,6 +114,52 @@ namespace PosApi.Controllers
             return NoContent();
         }
 
+        // ==========================================
+        // API KIỂM KÊ VÀ CÂN BẰNG KHO (STOCKTAKE)
+        // ==========================================
+        [HttpPost("stocktake")]
+        public async Task<IActionResult> SubmitStocktake([FromBody] List<StocktakeDto> items)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                foreach (var item in items)
+                {
+                    var ingredient = await _context.Ingredients.FindAsync(item.IngredientId);
+                    if (ingredient != null)
+                    {
+                        // 1. ÉP SỐ LƯỢNG HỆ THỐNG = SỐ LƯỢNG THỰC TẾ
+                        ingredient.CurrentStock = item.ActualStock;
+
+                        // 2. AUTO-LOCK: Nếu món đó xài hết sạch, tự động khóa trên Menu bán hàng
+                        if (ingredient.IsLinkedToProduct && ingredient.LinkedProductId.HasValue)
+                        {
+                            var product = await _context.Products.FindAsync(ingredient.LinkedProductId.Value);
+                            if (product != null)
+                            {
+                                product.IsAvailable = ingredient.CurrentStock > 0;
+                            }
+                        }
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, "Lỗi khi cân bằng kho: " + ex.Message);
+            }
+        }
+
+        public class StocktakeDto
+        {
+            public int IngredientId { get; set; }
+            public double ActualStock { get; set; }
+        }
+
         // --- CÁI "RỔ" HỨNG DỮ LIỆU TỪ WEB GỬI LÊN ---
         public class IngredientCreateDto
         {
