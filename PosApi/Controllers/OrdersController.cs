@@ -86,8 +86,8 @@ namespace PosApi.Controllers
                     TotalAmount = totalAmount,
                     OrderDate = DateTime.UtcNow,
                     Status = !string.IsNullOrEmpty(dto.Status) ? dto.Status : "Pending",
-                    OrderType = !string.IsNullOrEmpty(dto.OrderType) ? dto.OrderType : "DineIn",
-                    PaymentMethod = dto.PaymentMethod, // Lấy phương thức thanh toán
+                    OrderType = !string.IsNullOrEmpty(dto.OrderType) ? dto.OrderType : "Tại chỗ",
+                    PaymentMethod = dto.PaymentMethod, // 👉 BẠN ĐANG THIẾU DÒNG NÀY
                     OrderDetails = orderDetails
                 };
 
@@ -253,7 +253,8 @@ namespace PosApi.Controllers
             order.Status = "Paid";
             await _context.SaveChangesAsync();
 
-            await _hubContext.Clients.All.SendAsync("OrderChanged"); // Báo thu ngân
+            // 👉 THÊM DÒNG NÀY ĐỂ BÁO CHO WEB ADMIN VÀ CÁC APP KHÁC TẢI LẠI TRANG
+            await _hubContext.Clients.All.SendAsync("OrderChanged");
             return Ok();
         }
 
