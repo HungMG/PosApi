@@ -29,18 +29,20 @@ namespace PosApi.Controllers
             DateTime startOf7DaysUtc = todayVn.AddDays(-6).AddHours(-7);
 
             // 2. TÍNH DOANH THU (Hôm nay & Tháng này)
+            // 👉 ÉP KIỂU (decimal?) VÀ THÊM ?? 0 ĐỂ CHỐNG SẬP KHI KHÔNG CÓ ĐƠN NÀO
             var revenueToday = await _context.Orders
                 .Where(o => (o.Status == "Paid" || o.Status == "Completed") && o.OrderDate >= startOfTodayUtc)
-                .SumAsync(o => o.TotalAmount);
+                .SumAsync(o => (decimal?)o.TotalAmount) ?? 0;
 
             var revenueMonth = await _context.Orders
                 .Where(o => (o.Status == "Paid" || o.Status == "Completed") && o.OrderDate >= startOfMonthUtc)
-                .SumAsync(o => o.TotalAmount);
+                .SumAsync(o => (decimal?)o.TotalAmount) ?? 0;
 
             // 3. TÍNH TỔNG CHI PHÍ THÁNG (Kho + Lương tạm tính)
+            // 👉 LÀM TƯƠNG TỰ CHO BẢNG NHẬP KHO
             var inventoryCost = await _context.InventoryReceipts
                 .Where(r => r.ImportDate >= startOfMonthUtc)
-                .SumAsync(r => r.TotalCost);
+                .SumAsync(r => (decimal?)r.TotalCost) ?? 0;
 
             var attendances = await _context.Attendances
                 .Include(a => a.Staff)

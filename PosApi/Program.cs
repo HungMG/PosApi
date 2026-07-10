@@ -9,11 +9,13 @@ var builder = WebApplication.CreateBuilder(args);
 // ==========================================
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll",
-        policy => policy.SetIsOriginAllowed(_ => true) // Thay thế AllowAnyOrigin
-                        .AllowAnyMethod()
-                        .AllowAnyHeader()
-                        .AllowCredentials());          // BẮT BUỘC PHẢI CÓ cho SignalR
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.SetIsOriginAllowed(_ => true) // Chấp nhận mọi nguồn (localhost, ngrok, render...)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials(); // 👈 BẮT BUỘC PHẢI CÓ DÒNG NÀY CHO SIGNALR
+    });
 });
 
 // ==========================================
