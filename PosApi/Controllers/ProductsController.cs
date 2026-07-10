@@ -18,10 +18,25 @@ namespace PosApi.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Product>>> GetProducts()
         {
-            // Chỉ lấy những món còn hiển thị (IsAvailable = true) để điện thoại load lên
-            var products = await _context.Products
-                .Include(p => p.Category)
+            // 1. Kéo danh sách món ăn
+            var products = await _context.Products.ToListAsync();
+
+            // 2. Kéo các nguyên liệu đóng chai (Sting, Nước suối) đang có liên kết
+            var ingredients = await _context.Ingredients
+                .Where(i => i.IsLinkedToProduct && i.LinkedProductId != null)
                 .ToListAsync();
+
+            // 3. Ghép số lượng Tồn Kho vào biến Quota để App Mobile hiển thị
+            foreach (var p in products)
+            {
+                var linkedIng = ingredients.FirstOrDefault(i => i.LinkedProductId == p.Id);
+                if (linkedIng != null)
+                {
+                    // Lấy số CurrentStock của Kho đè vào DailyQuota để App hiển thị
+                    p.DailyQuota = (int)linkedIng.CurrentStock;
+                }
+            }
+
             return Ok(products);
         }
 
