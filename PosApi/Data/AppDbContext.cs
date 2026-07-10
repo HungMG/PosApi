@@ -27,6 +27,8 @@ namespace PosApi.Models
         public DbSet<Stocktake> Stocktakes { get; set; }
         public DbSet<StocktakeDetail> StocktakeDetails { get; set; }
 
+        public DbSet<ShiftReport> ShiftReports { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
