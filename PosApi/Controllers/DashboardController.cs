@@ -25,9 +25,10 @@ namespace PosApi.Controllers
                 DateTime vnNow = utcNow.AddHours(7);
                 DateTime todayVn = vnNow.Date; // 00:00:00 hôm nay tại VN
 
-                DateTime startOfTodayUtc = todayVn.AddHours(-7);
-                DateTime startOfMonthUtc = new DateTime(todayVn.Year, todayVn.Month, 1).AddHours(-7);
-                DateTime startOf7DaysUtc = todayVn.AddDays(-6).AddHours(-7);
+                // 👉 SỬA LỖI Ở ĐÂY: Dùng DateTime.SpecifyKind để ÉP BUỘC dán nhãn UTC cho PostgreSQL hiểu!
+                DateTime startOfTodayUtc = DateTime.SpecifyKind(todayVn.AddHours(-7), DateTimeKind.Utc);
+                DateTime startOfMonthUtc = DateTime.SpecifyKind(new DateTime(todayVn.Year, todayVn.Month, 1).AddHours(-7), DateTimeKind.Utc);
+                DateTime startOf7DaysUtc = DateTime.SpecifyKind(todayVn.AddDays(-6).AddHours(-7), DateTimeKind.Utc);
 
                 // ========================================================
                 // 2. KÉO DATA VỀ RAM TRƯỚC ĐỂ TRÁNH LỖI SUMASYNC CỦA DATABASE
