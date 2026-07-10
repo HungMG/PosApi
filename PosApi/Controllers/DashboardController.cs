@@ -18,102 +18,114 @@ namespace PosApi.Controllers
         [HttpGet("summary")]
         public async Task<ActionResult<DashboardDataDto>> GetDashboardSummary()
         {
-            // 1. Xử lý Múi giờ Việt Nam (+7) để thống kê chính xác tuyệt đối
-            DateTime utcNow = DateTime.UtcNow;
-            DateTime vnNow = utcNow.AddHours(7);
-            DateTime todayVn = vnNow.Date; // 00:00:00 hôm nay tại VN
-
-            // Các mốc thời gian quy đổi ngược lại UTC để quét Database tốc độ cao
-            DateTime startOfTodayUtc = todayVn.AddHours(-7);
-            DateTime startOfMonthUtc = new DateTime(todayVn.Year, todayVn.Month, 1).AddHours(-7);
-            DateTime startOf7DaysUtc = todayVn.AddDays(-6).AddHours(-7);
-
-            // 2. TÍNH DOANH THU (Hôm nay & Tháng này)
-            // 👉 ÉP KIỂU (decimal?) VÀ THÊM ?? 0 ĐỂ CHỐNG SẬP KHI KHÔNG CÓ ĐƠN NÀO
-            var revenueToday = await _context.Orders
-                .Where(o => (o.Status == "Paid" || o.Status == "Completed") && o.OrderDate >= startOfTodayUtc)
-                .SumAsync(o => (decimal?)o.TotalAmount) ?? 0;
-
-            var revenueMonth = await _context.Orders
-                .Where(o => (o.Status == "Paid" || o.Status == "Completed") && o.OrderDate >= startOfMonthUtc)
-                .SumAsync(o => (decimal?)o.TotalAmount) ?? 0;
-
-            // 3. TÍNH TỔNG CHI PHÍ THÁNG (Kho + Lương tạm tính)
-            // 👉 LÀM TƯƠNG TỰ CHO BẢNG NHẬP KHO
-            var inventoryCost = await _context.InventoryReceipts
-                .Where(r => r.ImportDate >= startOfMonthUtc)
-                .SumAsync(r => (decimal?)r.TotalCost) ?? 0;
-
-            var attendances = await _context.Attendances
-                .Include(a => a.Staff)
-                .Where(a => a.WorkDate >= startOfMonthUtc)
-                .ToListAsync();
-            var salaryCost = attendances.Sum(a => (decimal)a.TotalHours * (a.Staff?.HourlyRate ?? 0));
-
-            var totalCostMonth = inventoryCost + salaryCost;
-
-            // 4. LỢI NHUẬN GỘP TRONG THÁNG
-            var grossProfit = revenueMonth - totalCostMonth;
-
-            // 5. THỐNG KÊ CHI TIẾT SẢN PHẨM BÁN RA (THÁNG NÀY)
-            var orderDetailsThisMonth = await _context.OrderDetails
-                .Include(od => od.Product)
-                .ThenInclude(p => p.Category)
-                .Include(od => od.Order)
-                .Where(od => (od.Order.Status == "Paid" || od.Order.Status == "Completed") && od.Order.OrderDate >= startOfMonthUtc)
-                .ToListAsync();
-
-            var productSales = orderDetailsThisMonth
-                .GroupBy(od => od.ProductId)
-                .Select(g => new ProductSalesDto
-                {
-                    ProductName = g.First().Product?.Name ?? "Món đã xóa",
-                    CategoryName = g.First().Product?.Category?.Name ?? "Khác",
-                    TotalQuantity = g.Sum(od => od.Quantity),
-                    TotalRevenue = g.Sum(od => (decimal)od.Quantity * od.UnitPrice)
-                })
-                .OrderByDescending(p => p.TotalQuantity) // Xếp hạng bán chạy nhất lên đầu
-                .ToList();
-
-            // 6. CẢNH BÁO KẾT THÚC KHO
-            var lowStockItems = await _context.Ingredients
-                .Where(i => i.CurrentStock <= i.MinStock)
-                .Select(i => new LowStockDto
-                {
-                    IngredientName = i.Name,
-                    CurrentStock = i.CurrentStock,
-                    MinStock = i.MinStock,
-                    Unit = i.Unit
-                })
-                .ToListAsync();
-
-            // 7. BIỂU ĐỒ DOANH THU 7 NGÀY GẦN NHẤT
-            var recentOrders = await _context.Orders
-                .Where(o => (o.Status == "Paid" || o.Status == "Completed") && o.OrderDate >= startOf7DaysUtc)
-                .ToListAsync();
-
-            var last7DaysRevenue = new List<DailyRevenueDto>();
-            for (int i = 0; i < 7; i++)
+            try
             {
-                var targetDateVn = todayVn.AddDays(-6 + i); // Tính tiến dần lên hôm nay
-                last7DaysRevenue.Add(new DailyRevenueDto
+                // 1. Xử lý Múi giờ Việt Nam (+7)
+                DateTime utcNow = DateTime.UtcNow;
+                DateTime vnNow = utcNow.AddHours(7);
+                DateTime todayVn = vnNow.Date; // 00:00:00 hôm nay tại VN
+
+                DateTime startOfTodayUtc = todayVn.AddHours(-7);
+                DateTime startOfMonthUtc = new DateTime(todayVn.Year, todayVn.Month, 1).AddHours(-7);
+                DateTime startOf7DaysUtc = todayVn.AddDays(-6).AddHours(-7);
+
+                // ========================================================
+                // 2. KÉO DATA VỀ RAM TRƯỚC ĐỂ TRÁNH LỖI SUMASYNC CỦA DATABASE
+                // ========================================================
+
+                // Kéo các đơn đã thanh toán trong tháng này về RAM
+                var ordersMonth = await _context.Orders
+                    .Where(o => (o.Status == "Paid" || o.Status == "Completed") && o.OrderDate >= startOfMonthUtc)
+                    .ToListAsync();
+
+                // Dùng C# tính tổng (An toàn tuyệt đối)
+                var revenueToday = ordersMonth
+                    .Where(o => o.OrderDate >= startOfTodayUtc)
+                    .Sum(o => o.TotalAmount);
+
+                var revenueMonth = ordersMonth.Sum(o => o.TotalAmount);
+
+                // 3. TÍNH TỔNG CHI PHÍ THÁNG (Kéo về RAM rồi mới tính)
+                var receiptsMonth = await _context.InventoryReceipts
+                    .Where(r => r.ImportDate >= startOfMonthUtc)
+                    .ToListAsync();
+                var inventoryCost = receiptsMonth.Sum(r => r.TotalCost);
+
+                var attendances = await _context.Attendances
+                    .Include(a => a.Staff)
+                    .Where(a => a.WorkDate >= startOfMonthUtc)
+                    .ToListAsync();
+                var salaryCost = attendances.Sum(a => (decimal)a.TotalHours * (a.Staff?.HourlyRate ?? 0));
+
+                var totalCostMonth = inventoryCost + salaryCost;
+
+                // 4. LỢI NHUẬN GỘP TRONG THÁNG
+                var grossProfit = revenueMonth - totalCostMonth;
+
+                // 5. THỐNG KÊ CHI TIẾT SẢN PHẨM BÁN RA
+                var orderDetailsThisMonth = await _context.OrderDetails
+                    .Include(od => od.Product)
+                    .ThenInclude(p => p.Category)
+                    .Include(od => od.Order)
+                    .Where(od => (od.Order.Status == "Paid" || od.Order.Status == "Completed") && od.Order.OrderDate >= startOfMonthUtc)
+                    .ToListAsync();
+
+                var productSales = orderDetailsThisMonth
+                    .GroupBy(od => od.ProductId)
+                    .Select(g => new ProductSalesDto
+                    {
+                        ProductName = g.First().Product?.Name ?? "Món đã xóa",
+                        CategoryName = g.First().Product?.Category?.Name ?? "Khác",
+                        TotalQuantity = g.Sum(od => od.Quantity),
+                        TotalRevenue = g.Sum(od => (decimal)od.Quantity * od.UnitPrice)
+                    })
+                    .OrderByDescending(p => p.TotalQuantity)
+                    .ToList();
+
+                // 6. CẢNH BÁO KẾT THÚC KHO
+                var lowStockItems = await _context.Ingredients
+                    .Where(i => i.CurrentStock <= i.MinStock)
+                    .Select(i => new LowStockDto
+                    {
+                        IngredientName = i.Name,
+                        CurrentStock = i.CurrentStock,
+                        MinStock = i.MinStock,
+                        Unit = i.Unit
+                    })
+                    .ToListAsync();
+
+                // 7. BIỂU ĐỒ DOANH THU 7 NGÀY GẦN NHẤT
+                var recentOrders = await _context.Orders
+                    .Where(o => (o.Status == "Paid" || o.Status == "Completed") && o.OrderDate >= startOf7DaysUtc)
+                    .ToListAsync();
+
+                var last7DaysRevenue = new List<DailyRevenueDto>();
+                for (int i = 0; i < 7; i++)
                 {
-                    DateLabel = targetDateVn.ToString("dd/MM"),
-                    Revenue = recentOrders.Where(o => o.OrderDate.AddHours(7).Date == targetDateVn).Sum(o => o.TotalAmount)
+                    var targetDateVn = todayVn.AddDays(-6 + i);
+                    last7DaysRevenue.Add(new DailyRevenueDto
+                    {
+                        DateLabel = targetDateVn.ToString("dd/MM"),
+                        Revenue = recentOrders.Where(o => o.OrderDate.AddHours(7).Date == targetDateVn).Sum(o => o.TotalAmount)
+                    });
+                }
+
+                return Ok(new DashboardDataDto
+                {
+                    RevenueToday = revenueToday,
+                    RevenueMonth = revenueMonth,
+                    TotalCostMonth = totalCostMonth,
+                    GrossProfit = grossProfit,
+                    ProductSales = productSales,
+                    LowStockItems = lowStockItems,
+                    Last7DaysRevenue = last7DaysRevenue
                 });
             }
-
-            // TRẢ VỀ TOÀN BỘ GÓI DỮ LIỆU ĐÃ TÍNH SẴN CHO WEB
-            return Ok(new DashboardDataDto
+            catch (Exception ex)
             {
-                RevenueToday = revenueToday,
-                RevenueMonth = revenueMonth,
-                TotalCostMonth = totalCostMonth,
-                GrossProfit = grossProfit,
-                ProductSales = productSales,
-                LowStockItems = lowStockItems,
-                Last7DaysRevenue = last7DaysRevenue
-            });
+                // Nếu vẫn xui xẻo văng lỗi, nó sẽ in thẳng ra câu lỗi để sếp xem dễ dàng!
+                return StatusCode(500, $"Lỗi API Dashboard: {ex.Message}");
+            }
         }
     }
 
