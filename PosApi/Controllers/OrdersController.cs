@@ -41,13 +41,19 @@ namespace PosApi.Controllers
                     if (product != null)
                     {
                         if (!product.IsAvailable)
+                        {
+                            await transaction.RollbackAsync();
                             return BadRequest($"Món {product.Name} đã hết hàng!");
+                        }
 
-                        // A. XỬ LÝ QUOTA TRONG NGÀY (Cũ của bạn)
+                        // A. XỬ LÝ QUOTA TRONG NGÀY
                         if (product.DailyQuota.HasValue)
                         {
                             if (product.DailyQuota.Value < item.Quantity)
+                            {
+                                await transaction.RollbackAsync();
                                 return BadRequest($"Món {product.Name} chỉ còn {product.DailyQuota.Value} phần!");
+                            }
 
                             product.DailyQuota -= item.Quantity;
                             if (product.DailyQuota <= 0)
@@ -57,15 +63,22 @@ namespace PosApi.Controllers
                             }
                         }
 
-                        // B. XỬ LÝ TRỪ KHO ĐÓNG CHAI (Mới)
+                        // B. XỬ LÝ TRỪ KHO ĐÓNG CHAI (Đã thêm lệnh chặn kho âm)
                         var linkedIngredient = await _context.Ingredients.FirstOrDefaultAsync(i => i.LinkedProductId == item.ProductId);
                         if (linkedIngredient != null)
                         {
+                            // 👉 CHỐT CHẶN MỚI: Kiểm tra kho thực tế trước khi trừ
+                            if (linkedIngredient.CurrentStock < item.Quantity)
+                            {
+                                await transaction.RollbackAsync();
+                                return BadRequest($"Trong kho chỉ còn {linkedIngredient.CurrentStock} phần {product.Name}!");
+                            }
+
                             linkedIngredient.CurrentStock -= item.Quantity;
                             if (linkedIngredient.CurrentStock <= 0)
                             {
                                 linkedIngredient.CurrentStock = 0;
-                                product.IsAvailable = false; // Tắt luôn trên menu nếu hết kho
+                                product.IsAvailable = false;
                             }
                         }
 
@@ -87,25 +100,23 @@ namespace PosApi.Controllers
                     OrderDate = DateTime.UtcNow,
                     Status = !string.IsNullOrEmpty(dto.Status) ? dto.Status : "Pending",
                     OrderType = !string.IsNullOrEmpty(dto.OrderType) ? dto.OrderType : "Tại chỗ",
-                    PaymentMethod = dto.PaymentMethod, // 👉 BẠN ĐANG THIẾU DÒNG NÀY
+                    PaymentMethod = dto.PaymentMethod,
                     OrderDetails = orderDetails
                 };
 
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
 
-                await transaction.CommitAsync(); // Chốt giao dịch an toàn
-
-                await _hubContext.Clients.All.SendAsync("OrderChanged"); // Báo SignalR
+                await _hubContext.Clients.All.SendAsync("OrderChanged");
                 return Ok(order);
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync(); // Lỗi thì hoàn tác sạch sẽ
+                await transaction.RollbackAsync();
                 return StatusCode(500, "Lỗi tạo đơn: " + ex.Message);
             }
         }
-
         // ==========================================
         // 2. HỦY ĐƠN HÀNG (HOÀN TRẢ QUOTA + HOÀN KHO)
         // ==========================================
@@ -180,7 +191,6 @@ namespace PosApi.Controllers
                     }
                 }
 
-                // Xóa các món cũ đi để gán lại món mới
                 _context.OrderDetails.RemoveRange(order.OrderDetails);
 
                 decimal totalAmount = 0;
@@ -195,6 +205,13 @@ namespace PosApi.Controllers
                         // Trừ Quota
                         if (product.DailyQuota.HasValue)
                         {
+                            // 👉 CHỐT CHẶN MỚI: Bắt buộc kiểm tra lại sau khi đã khôi phục kho cũ
+                            if (product.DailyQuota.Value < item.Quantity)
+                            {
+                                await transaction.RollbackAsync();
+                                return BadRequest($"Cập nhật thất bại: {product.Name} chỉ còn tối đa {product.DailyQuota.Value} phần!");
+                            }
+
                             product.DailyQuota -= item.Quantity;
                             if (product.DailyQuota <= 0)
                             {
@@ -207,6 +224,13 @@ namespace PosApi.Controllers
                         var newLinkedIng = await _context.Ingredients.FirstOrDefaultAsync(i => i.LinkedProductId == item.ProductId);
                         if (newLinkedIng != null)
                         {
+                            // 👉 CHỐT CHẶN MỚI: Tránh âm kho khi Sửa đơn
+                            if (newLinkedIng.CurrentStock < item.Quantity)
+                            {
+                                await transaction.RollbackAsync();
+                                return BadRequest($"Cập nhật thất bại: Kho chỉ còn {newLinkedIng.CurrentStock} phần {product.Name}!");
+                            }
+
                             newLinkedIng.CurrentStock -= item.Quantity;
                             if (newLinkedIng.CurrentStock <= 0)
                             {
