@@ -170,6 +170,27 @@ namespace PosApi.Controllers
         }
 
         // ==========================================
+        // 3. API XÓA LỊCH SỬ KIỂM KHO
+        // ==========================================
+        [HttpDelete("stocktake/{id}")]
+        public async Task<IActionResult> DeleteStocktake(int id)
+        {
+            // Include bảng Detail vào để xóa luôn các dòng chi tiết bên trong
+            var stocktake = await _context.Stocktakes
+                .Include(s => s.Details)
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (stocktake == null) return NotFound();
+
+            // Lưu ý: Chúng ta CHỈ XÓA LỊCH SỬ phiếu, không hoàn tác tồn kho. 
+            // Nếu tồn kho sai, nhân viên sẽ tạo một phiếu kiểm đếm mới để đè số đúng lên.
+            _context.Stocktakes.Remove(stocktake);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
+
+        // ==========================================
         // 2. API LẤY LỊCH SỬ ĐỂ XEM LẠI
         // ==========================================
         [HttpGet("stocktake-history")]
