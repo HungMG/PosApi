@@ -18,10 +18,10 @@ namespace PosApi.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Category>>> GetCategories()
         {
-            // Nâng cấp: Tự động kéo theo các danh mục con (SubCategories)
             var categories = await _context.Categories
+                .AsNoTracking() // 👉 Thêm dòng này
                 .Include(c => c.SubCategories)
-                .Where(c => c.ParentId == null) // Chỉ lấy danh mục gốc, tụi con sẽ nằm bên trong
+                .Where(c => c.ParentId == null)
                 .ToListAsync();
 
             return Ok(categories);

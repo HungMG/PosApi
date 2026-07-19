@@ -18,11 +18,12 @@ namespace PosApi.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Product>>> GetProducts()
         {
-            // 1. Kéo danh sách món ăn
-            var products = await _context.Products.ToListAsync();
+            // 1. Kéo danh sách món ăn (Ép không theo dõi)
+            var products = await _context.Products.AsNoTracking().ToListAsync();
 
-            // 2. Kéo các nguyên liệu đóng chai (Sting, Nước suối) đang có liên kết
+            // 2. Kéo các nguyên liệu đóng chai đang có liên kết (Ép không theo dõi)
             var ingredients = await _context.Ingredients
+                .AsNoTracking()
                 .Where(i => i.IsLinkedToProduct && i.LinkedProductId != null)
                 .ToListAsync();
 

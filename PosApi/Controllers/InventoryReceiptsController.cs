@@ -15,15 +15,16 @@ namespace PosApi.Controllers
             _context = context;
         }
 
-  
-        // Lấy danh sách Lịch sử Nhập kho (Đã nâng cấp)
+
+        // Lấy danh sách Lịch sử Nhập kho (Đã nâng cấp và Tối ưu)
         [HttpGet]
         public async Task<ActionResult<IEnumerable<InventoryReceipt>>> GetReceipts()
         {
             return await _context.InventoryReceipts
-                .Include(r => r.Staff) // Lấy kèm tên nhân viên
-                .Include(r => r.ReceiptDetails) // LẤY KÈM CHI TIẾT CÁC MÓN
-                    .ThenInclude(d => d.Ingredient) // LẤY KÈM TÊN CỦA TỪNG MÓN
+                .AsNoTracking() // 👉 Cực kỳ quan trọng để giải phóng RAM cho chuỗi Include
+                .Include(r => r.Staff)
+                .Include(r => r.ReceiptDetails)
+                    .ThenInclude(d => d.Ingredient)
                 .OrderByDescending(r => r.ImportDate)
                 .ToListAsync();
         }

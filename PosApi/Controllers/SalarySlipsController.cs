@@ -19,7 +19,10 @@ namespace PosApi.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<SalarySlip>>> GetSalarySlips()
         {
-            return await _context.SalarySlips.Include(s => s.Staff).ToListAsync();
+            return await _context.SalarySlips
+                .AsNoTracking() // 👉 Thêm dòng này
+                .Include(s => s.Staff)
+                .ToListAsync();
         }
 
         // Chốt lương (Lưu phiếu mới)

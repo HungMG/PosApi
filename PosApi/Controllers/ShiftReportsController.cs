@@ -20,6 +20,7 @@ namespace PosApi.Controllers
         public async Task<ActionResult<IEnumerable<ShiftReport>>> GetShiftReports()
         {
             return await _context.ShiftReports
+                .AsNoTracking() // 👉 Thêm dòng này
                 .Include(s => s.Staff)
                 .OrderByDescending(s => s.ReportDate)
                 .ToListAsync();

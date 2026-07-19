@@ -16,10 +16,12 @@ namespace PosApi.Controllers
         }
 
         // Lấy danh sách nguyên liệu trong kho
+        // Lấy danh sách nguyên liệu trong kho
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Ingredient>>> GetIngredients()
         {
-            return await _context.Ingredients.ToListAsync();
+            // Thêm AsNoTracking() để đọc kho cực nhanh
+            return await _context.Ingredients.AsNoTracking().ToListAsync();
         }
 
         // TẠO MỚI (CÓ KÈM LOGIC TỰ TẠO SẢN PHẨM)
@@ -197,9 +199,10 @@ namespace PosApi.Controllers
         public async Task<ActionResult<IEnumerable<Stocktake>>> GetStocktakeHistory()
         {
             return await _context.Stocktakes
+                .AsNoTracking() // 👉 Chặn EF Core theo dõi lịch sử
                 .Include(s => s.Details)
-                    .ThenInclude(d => d.Ingredient) // Lấy kèm tên món
-                .Where(s => s.Details.Any()) // Chỉ lấy những lần kiểm kho có phát hiện lệch
+                    .ThenInclude(d => d.Ingredient)
+                .Where(s => s.Details.Any())
                 .OrderByDescending(s => s.CheckDate)
                 .ToListAsync();
         }

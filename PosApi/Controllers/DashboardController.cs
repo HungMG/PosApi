@@ -36,6 +36,7 @@ namespace PosApi.Controllers
 
                 // Kéo các đơn đã thanh toán trong tháng này về RAM
                 var ordersMonth = await _context.Orders
+                    .AsNoTracking() // 👉 CHÈN VÀO ĐÂY
                     .Where(o => (o.Status == "Paid" || o.Status == "Completed") && o.OrderDate >= startOfMonthUtc)
                     .ToListAsync();
 
@@ -48,11 +49,13 @@ namespace PosApi.Controllers
 
                 // 3. TÍNH TỔNG CHI PHÍ THÁNG (Kéo về RAM rồi mới tính)
                 var receiptsMonth = await _context.InventoryReceipts
+                    .AsNoTracking() // 👉 CHÈN VÀO ĐÂY
                     .Where(r => r.ImportDate >= startOfMonthUtc)
                     .ToListAsync();
                 var inventoryCost = receiptsMonth.Sum(r => r.TotalCost);
 
                 var attendances = await _context.Attendances
+                    .AsNoTracking() // 👉 CHÈN VÀO ĐÂY
                     .Include(a => a.Staff)
                     .Where(a => a.WorkDate >= startOfMonthUtc)
                     .ToListAsync();
@@ -65,6 +68,7 @@ namespace PosApi.Controllers
 
                 // 5. THỐNG KÊ CHI TIẾT SẢN PHẨM BÁN RA
                 var orderDetailsThisMonth = await _context.OrderDetails
+                    .AsNoTracking() // 👉 CHÈN VÀO ĐÂY
                     .Include(od => od.Product)
                     .ThenInclude(p => p.Category)
                     .Include(od => od.Order)
@@ -85,6 +89,7 @@ namespace PosApi.Controllers
 
                 // 6. CẢNH BÁO KẾT THÚC KHO
                 var lowStockItems = await _context.Ingredients
+                    .AsNoTracking() // 👉 CHÈN VÀO ĐÂY
                     .Where(i => i.CurrentStock <= i.MinStock)
                     .Select(i => new LowStockDto
                     {
@@ -97,6 +102,7 @@ namespace PosApi.Controllers
 
                 // 7. BIỂU ĐỒ DOANH THU 7 NGÀY GẦN NHẤT
                 var recentOrders = await _context.Orders
+                    .AsNoTracking() // 👉 CHÈN VÀO ĐÂY
                     .Where(o => (o.Status == "Paid" || o.Status == "Completed") && o.OrderDate >= startOf7DaysUtc)
                     .ToListAsync();
 

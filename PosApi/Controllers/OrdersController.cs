@@ -286,6 +286,7 @@ namespace PosApi.Controllers
         public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
         {
             var orders = await _context.Orders
+                .AsNoTracking() // 👉 Thêm dòng này, rất quan trọng vì lịch sử đơn hàng rất dài
                 .Include(o => o.OrderDetails)
                 .ThenInclude(od => od.Product)
                 .OrderByDescending(o => o.OrderDate)

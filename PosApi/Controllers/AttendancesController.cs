@@ -18,9 +18,12 @@ namespace PosApi.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Attendance>>> GetAttendances()
         {
-            return await _context.Attendances.Include(a => a.Staff).ToListAsync();
+            // Chèn AsNoTracking() trước Include để không lưu cache chấm công
+            return await _context.Attendances
+                .AsNoTracking()
+                .Include(a => a.Staff)
+                .ToListAsync();
         }
-
         // API MỚI: Quản lý tự nhập số giờ làm bằng tay
         [HttpPost("manual")]
         public async Task<ActionResult<Attendance>> AddManualAttendance([FromBody] Attendance attendance)

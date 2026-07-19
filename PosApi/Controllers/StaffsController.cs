@@ -18,7 +18,7 @@ namespace PosApi.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Staff>>> GetStaffs()
         {
-            return await _context.Staffs.ToListAsync();
+            return await _context.Staffs.AsNoTracking().ToListAsync(); // 👉 Thêm ở đây
         }
 
         [HttpPost]
@@ -50,9 +50,11 @@ namespace PosApi.Controllers
 
         // API HỖ TRỢ ĐĂNG NHẬP NHANH
         [HttpPost("login")]
+        [HttpPost("login")]
         public async Task<ActionResult<Staff>> Login([FromBody] LoginDto loginDto)
         {
             var staff = await _context.Staffs
+                .AsNoTracking() // 👉 Thêm ở đây để login nhanh hơn 1 chút
                 .FirstOrDefaultAsync(s => s.Username == loginDto.Username && s.PasswordHash == loginDto.Password);
 
             if (staff == null || !staff.IsActive)
